@@ -4,7 +4,65 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="game-container">
+  <div id="menu-container">
+    <h1 id="title">Pokemon: Higher or Lower</h1>
+    <h3 id="subtitle">Selected generations are included</h3>
+
+    <div class="gen-buttons">  
+
+      <div class= "gen-item">
+        <img id="charmander" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/4.png" alt="Charmander">
+        <button id="gen1-btn" class="selected">1 Kanto</button>
+      </div>
+
+      <div class= "gen-item">
+        <img id="chikorita" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/152.png" alt="Chikorita">
+        <button id="gen2-btn" class="selected">2 Johto</button>
+      </div>
+
+      <div class= "gen-item">
+        <img id="mudkip" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/258.png" alt="Mudkip">
+        <button id="gen3-btn" class="selected">3 Hoenn</button>
+      </div>
+
+      <div class= "gen-item">
+        <img id="chimchar" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/390.png" alt="Chimchar">
+        <button id="gen4-btn" class="selected">4 Sinnoh</button>
+      </div>
+
+      <div class= "gen-item">
+        <img id="snivy" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/495.png" alt="Snivy">
+        <button id="gen5-btn" class="selected">5 Unova</button>
+      </div>
+
+      <div class= "gen-item">
+        <img id="froakie" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/656.png" alt="Froakie">
+        <button id="gen6-btn" class="selected">6 Kalos</button>
+      </div>
+
+      <div class= "gen-item">
+        <img id="litten" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/725.png" alt="Litten">
+        <button id="gen7-btn" class="selected">7 Alola</button>
+      </div>
+
+      <div class= "gen-item">
+        <img id="grookey" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/810.png" alt="Grookey">
+        <button id="gen8-btn" class="selected">8 Galar</button>
+      </div>
+
+      <div class= "gen-item">
+        <img id="Quaxly" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/912.png" alt="Quaxly">
+        <button id="gen9-btn" class="selected">9 Paldea</button>
+      </div>
+
+      <div class="gen-item">
+        <img id="pikachu" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png" alt="Pikachu">
+        <button id="all-btn" class="selected">All</button>
+      </div>
+    </div>
+    <button id="start-btn">Start</button>
+  </div>
+  <div id="game-container" style="display: none;">
     <div id="score-label">Score: 0</div>
     <div id="high-score-label">Best: 0</div>
     <div id="question-label">Loading...</div>
