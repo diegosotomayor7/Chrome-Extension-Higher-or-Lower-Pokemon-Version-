@@ -1,4 +1,4 @@
-# 🎮 Pokémon Higher or Lower – Chrome Extension
+#  Pokémon Higher or Lower – Chrome Extension
 
 A simple and addictive Chrome Extension game inspired by the classic "Higher or Lower" format. Two Pokémon appear side by side, and you must guess whether the new Pokémon's randomly selected stat is **higher** or **lower** than the current one. Keep guessing correctly to build your streak!
 
@@ -8,7 +8,7 @@ A simple and addictive Chrome Extension game inspired by the classic "Higher or 
 
 ---
 
-## 📸 Screenshots
+##  Screenshots
 <img width="1383" height="738" alt="image" src="https://github.com/user-attachments/assets/5dd886a8-3123-4d88-ab89-dd8b90ff864f" />
 
 ![extension_gif](https://github.com/user-attachments/assets/cb6c1210-00b4-4d91-a51e-49238b55928e)
@@ -18,7 +18,7 @@ A simple and addictive Chrome Extension game inspired by the classic "Higher or 
 
 ---
 
-## 🕹️ How to Play
+##  How to Play
 
 1. Click the extension icon in your Chrome toolbar to open the popup.
 2. Two Pokémon will appear with a random stat category (HP, Attack, Defense, Special Attack, Special Defense, or Speed).
@@ -29,7 +29,7 @@ A simple and addictive Chrome Extension game inspired by the classic "Higher or 
 
 ---
 
-## ✨ Features
+##  Features
 
 - **1025 Pokémon** — Covers all Pokémon through Generation IX (as of February 2025)
 - **6 stat categories** — HP, Attack, Defense, Special Attack, Special Defense, and Speed
@@ -38,13 +38,3 @@ A simple and addictive Chrome Extension game inspired by the classic "Higher or 
 - **Lightweight & fast** — No external dependencies or frameworks, pure vanilla JavaScript
 - **Offline-friendly score tracking** — High scores persist even after closing the browser
 
-## 📁 Project Structure
-├── manifest.json        # Chrome Extension manifest (v3)
-├── popup.html           # Extension popup UI
-├── popup.js             # Game logic and API calls
-├── styles.css           # Popup styling
-├── icons/               # Extension icons
-│   ├── icon16.png
-│   ├── icon48.png
-│   └── icon128.png
-└── README.md
