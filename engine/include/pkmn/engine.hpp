@@ -1,8 +1,8 @@
 // Game engine for Pokémon Higher or Lower.
 //
 // Owns the Pokémon pool, picks each round's challenger and stat according to the difficulty,
-// checks guesses, and keeps score. It has no browser or Emscripten dependencies: the web build
-// wraps it in src/bindings.cpp, and the unit tests use it directly.
+// checks guesses, and keeps score. Contains no browser-specific code; the JavaScript bindings
+// are in src/bindings.cpp.
 
 #pragma once
 

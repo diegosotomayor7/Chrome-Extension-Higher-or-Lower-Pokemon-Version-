@@ -47,12 +47,12 @@ CREATE TABLE pokemon_types (
     UNIQUE (pokemon_id, type_id)
 ) WITHOUT ROWID;
 
--- The game filters by generation every round, and "who has the highest X" queries scan by stat.
+-- Lookups by generation, by stat value, and by type.
 CREATE INDEX idx_pokemon_generation   ON pokemon(generation_id);
 CREATE INDEX idx_pokemon_stats_value  ON pokemon_stats(stat_id, base_value);
 CREATE INDEX idx_pokemon_types_type   ON pokemon_types(type_id);
 
--- One row per Pokémon with its stats pivoted into columns: the shape popup.js works with.
+-- One row per Pokémon with its stats pivoted into columns, as loaded by the game.
 CREATE VIEW pokemon_card AS
 SELECT
     p.id,

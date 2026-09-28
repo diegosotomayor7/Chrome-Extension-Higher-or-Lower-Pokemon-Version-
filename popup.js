@@ -4,7 +4,7 @@
 const pokedexReady = loadPokedex();
 pokedexReady.catch(err => console.error('Failed to load Pokédex:', err));
 
-// The C++ game engine, compiled to WebAssembly (see engine/)
+// The game engine, written in C++ and compiled to WebAssembly
 const engineReady = createPkmnEngine();
 engineReady.catch(err => console.error('Failed to load game engine:', err));
 
@@ -41,7 +41,7 @@ function queryAll(db, sql, params = []) {
 }
 
 // Every Pokémon from the given generations, or from all of them if `gens` is omitted.
-// Ordered by id so the Daily Challenge engine sees the same pool on every computer.
+// Ordered by id so the Daily Challenge deals the same rounds on every computer.
 function loadPool(db, gens) {
     const where = gens ? `WHERE generation_id IN (${gens.map(() => '?').join(', ')})` : '';
     return queryAll(db, `
@@ -73,7 +73,7 @@ function todayString() {
 
 // --- Storage ---
 
-// High scores are kept per difficulty. Scores saved before difficulties existed count as Normal.
+// High scores are kept per difficulty. A single legacy high score (pkmnHighScore) is treated as Normal.
 async function loadHighScores() {
     const data = await chrome.storage.local.get(['pkmnHighScores', 'pkmnHighScore']);
     return data.pkmnHighScores ?? { normal: data.pkmnHighScore ?? 0 };

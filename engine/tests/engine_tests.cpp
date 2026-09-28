@@ -205,7 +205,7 @@ INSTANTIATE_TEST_SUITE_P(Engine, EveryDifficulty, ::testing::ValuesIn(kAllDiffic
                          });
 
 TEST(Engine, FallsBackWhenNoChallengerFitsTheDifficulty) {
-    // Identical stats: every gap is 0, which Extreme (1-5) never allows.
+    // Identical stats: every gap is 0, which Extreme (1-10) never allows.
     const std::map<int, Pokemon> twins{{1, {1, {80, 80, 80, 80, 80, 80}}},
                                        {2, {2, {80, 80, 80, 80, 80, 80}}}};
     Engine engine = makeEngine(twins, Difficulty::Extreme);
@@ -397,7 +397,7 @@ TEST(Daily, RestartingReplaysTheSameChallenge) {
     Engine engine = makeDaily(pool, 77);
     const Round first = engine.round();
     for (int i = 0; i < 6; ++i) engine.guess(correctGuess(pool, engine.round()));
-    engine.startGame();  // an endless game in between uses up random numbers
+    engine.startGame();  // an endless game in between advances the random number generator
     engine.startDailyChallenge();
     EXPECT_TRUE(sameRound(engine.round(), first));
 }
