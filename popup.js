@@ -1,75 +1,67 @@
-function gameLogic(enabledGens) {
+// --- Pokédex Database ---
 
-    const genRanges = {
-        1: [1, 151],
-        2: [152, 251],
-        3: [252, 386],
-        4: [387, 493],
-        5: [494, 649],
-        6: [650, 721],
-        7: [722, 809],
-        8: [810, 905],
-        9: [906, 1025]
-    };
+// Start loading as soon as the popup opens so the game is ready by the time Start is clicked.
+const pokedexReady = loadPokedex();
+pokedexReady.catch(err => console.error('Failed to load Pokédex:', err));
 
-    // Build the pool of valid Pokémon IDs based on enabled generations
-    let validIds = [];
-    for (const gen of enabledGens) {
-        const [start, end] = genRanges[gen];
-        for (let i = start; i <= end; i++) {
-            validIds.push(i);
-        }
+async function loadPokedex() {
+    const SQL = await initSqlJs({ locateFile: file => `vendor/sql.js/${file}` });
+    const response = await fetch('data/pokedex.db');
+    if (!response.ok) throw new Error(`Could not load data/pokedex.db (HTTP ${response.status})`);
+    return new SQL.Database(new Uint8Array(await response.arrayBuffer()));
+}
+
+function queryAll(db, sql, params = []) {
+    const stmt = db.prepare(sql);
+    try {
+        stmt.bind(params);
+        const rows = [];
+        while (stmt.step()) rows.push(stmt.getAsObject());
+        return rows;
+    } finally {
+        stmt.free();
     }
+}
 
-    // Fallback to gen 1 if somehow empty
-    if (validIds.length === 0) {
-        const [start, end] = genRanges[1];
-        for (let i = start; i <= end; i++) {
-            validIds.push(i);
-        }
-    }
+
+function gameLogic(db, enabledGens) {
+
+    // Load every Pokémon from the enabled generations in one query
+    const placeholders = enabledGens.map(() => '?').join(', ');
+    const pool = queryAll(db, `
+        SELECT id, name, hp, attack, defense, special_attack, special_defense, speed
+        FROM pokemon_card
+        WHERE generation_id IN (${placeholders})`, enabledGens);
 
     let highScore = 0;
 
     // --- Prefetch Queue ---
+    // Pokémon are picked a few rounds ahead so their sprites are already downloaded when shown.
     const QUEUE_SIZE = 3;
     let prefetchQueue = [];
-    let isFilling = false;
 
-    function randomValidId(excludeId) {
-        let id;
+    function randomPokemon(excludeId) {
+        let pkmn;
         do {
-            id = validIds[Math.floor(Math.random() * validIds.length)];
-        } while (id === excludeId && validIds.length > 1);
-        return id;
+            pkmn = pool[Math.floor(Math.random() * pool.length)];
+        } while (pkmn.id === excludeId && pool.length > 1);
+        return pkmn;
     }
 
-    async function fillQueue() {
-        if (isFilling) return;
-        isFilling = true;
+    function fillQueue() {
         while (prefetchQueue.length < QUEUE_SIZE) {
-            const id = randomValidId(null);
-            const data = await getPokemonData(id);
-            if (data) {
-                const img = new Image();
-                img.src = getImageUrl(id);
-                prefetchQueue.push(data);
-            }
+            const pkmn = randomPokemon(null);
+            const img = new Image();
+            img.src = getImageUrl(pkmn.id);
+            prefetchQueue.push(pkmn);
         }
-        isFilling = false;
     }
 
-    async function getNextPokemon(excludeId) {
-        let index = prefetchQueue.findIndex(p => p.id !== excludeId);
-        if (index !== -1) {
-            const pkmn = prefetchQueue.splice(index, 1)[0];
-            fillQueue();
-            return pkmn;
-        }
-        let id = randomValidId(excludeId);
-        const data = await getPokemonData(id);
+    function getNextPokemon(excludeId) {
+        const index = prefetchQueue.findIndex(p => p.id !== excludeId);
+        const pkmn = index !== -1 ? prefetchQueue.splice(index, 1)[0] : randomPokemon(excludeId);
         fillQueue();
-        return data;
+        return pkmn;
     }
     // --- End Prefetch Queue ---
 
@@ -83,29 +75,6 @@ function gameLogic(enabledGens) {
         newRound();
     }
 
-    async function getPokemonData(id) {
-        try {
-            const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
-            if (!response.ok) throw new Error("Pokémon not found");
-
-            const data = await response.json();
-
-            return {
-                id: id,
-                name: data.name.charAt(0).toUpperCase() + data.name.slice(1),
-                hp: data.stats[0].base_stat,
-                attack: data.stats[1].base_stat,
-                defense: data.stats[2].base_stat,
-                "special-attack": data.stats[3].base_stat,
-                "special-defense": data.stats[4].base_stat,
-                speed: data.stats[5].base_stat
-            };
-        } catch (err) {
-            console.error(err.message);
-            return null;
-        }
-    }
-
     function getImageUrl(id) {
         return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
     }
@@ -114,22 +83,22 @@ function gameLogic(enabledGens) {
         "HP": "hp",
         "Attack": "attack",
         "Defense": "defense",
-        "Special Attack": "special-attack",
-        "Special Defense": "special-defense",
+        "Special Attack": "special_attack",
+        "Special Defense": "special_defense",
         "Speed": "speed"
     };
 
     const statsOptions = Object.keys(statsMapping);
     let currentPkmn, newPkmn, randomStat, count = 0;
 
-    async function newRound() {
+    function newRound() {
         document.getElementById('question-label').innerText = "";
 
         if (!currentPkmn) {
-            currentPkmn = await getNextPokemon(null);
+            currentPkmn = getNextPokemon(null);
         }
 
-        newPkmn = await getNextPokemon(currentPkmn.id);
+        newPkmn = getNextPokemon(currentPkmn.id);
 
         randomStat = statsOptions[Math.floor(Math.random() * statsOptions.length)];
 
@@ -230,7 +199,7 @@ document.getElementById('all-btn').onclick = () => {
 };
 
 // Start button
-document.getElementById('start-btn').onclick = () => {
+document.getElementById('start-btn').onclick = async () => {
     const enabledGens = [];
     for (let i = 1; i <= 9; i++) {
         if (genStates[i]) enabledGens.push(i);
@@ -241,7 +210,18 @@ document.getElementById('start-btn').onclick = () => {
         return;
     }
 
+    const startBtn = document.getElementById('start-btn');
+    startBtn.disabled = true;
+    let db;
+    try {
+        db = await pokedexReady;
+    } catch {
+        alert("Couldn't load the Pokédex database. Try reopening the extension.");
+        startBtn.disabled = false;
+        return;
+    }
+
     document.getElementById('menu-container').style.display = 'none';
     document.getElementById('game-container').style.display = 'block';
-    gameLogic(enabledGens);
+    gameLogic(db, enabledGens);
 };

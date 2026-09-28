@@ -1,0 +1,17 @@
+{
+  "name": "pokemon-higher-or-lower",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension game: guess which Pokémon has the higher stat.",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build:db": "node scripts/build-pokedex.mjs",
+    "vendor": "node scripts/vendor-sqljs.mjs"
+  },
+  "devDependencies": {
+    "sql.js": "^1.14.2"
+  }
+}
