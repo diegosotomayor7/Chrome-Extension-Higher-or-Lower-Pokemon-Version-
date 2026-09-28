@@ -20,7 +20,7 @@ A simple and addictive Chrome Extension game inspired by the classic "Higher or 
 
 ##  How to Play
 
-1. Click the extension icon in your Chrome toolbar to open the popup.
+1. Click the extension icon in your Chrome toolbar to open the popup, pick your generations and a difficulty, and press **Start**.
 2. Two Pokémon will appear with a random stat category (HP, Attack, Defense, Special Attack, Special Defense, or Speed).
 3. Guess whether the **new Pokémon** (right) has a **higher** or **lower** value for that stat compared to the **current Pokémon** (left).
 4. If you're correct, your score increases and the new Pokémon becomes the current one for the next round.
@@ -33,7 +33,8 @@ A simple and addictive Chrome Extension game inspired by the classic "Higher or 
 
 - **1025 Pokémon** — Covers all Pokémon through Generation IX (as of February 2025)
 - **6 stat categories** — HP, Attack, Defense, Special Attack, Special Defense, and Speed
-- **Persistent high score** — Your best streak is saved using `chrome.storage.local`
+- **4 difficulty levels** — Easy, Normal, Hard, and Extreme control how close the two Pokémon's stats are (see below)
+- **Persistent high scores** — Your best streak on each difficulty is saved using `chrome.storage.local`
 - **Live Pokémon sprites** — Fetched directly from the official [PokeAPI sprite repository](https://github.com/PokeAPI/sprites)
 - **Bundled Pokédex database** — Stats come from a local SQLite database queried in the browser with [sql.js](https://github.com/sql-js/sql.js), so rounds load instantly with no API calls
 - **Lightweight & fast** — No frameworks, pure vanilla JavaScript
@@ -64,3 +65,31 @@ npm run build:db -- --fresh # re-downloads everything
 ```
 
 The build runs integrity checks (every Pokémon has 6 stats and 1–2 types, no gaps in Dex numbers, contiguous generations, valid foreign keys) and only replaces `data/pokedex.db` if they all pass.
+
+---
+
+##  Game Engine (C++ → WebAssembly)
+
+The game logic is a C++17 engine in [`engine/`](engine/), compiled to WebAssembly with Emscripten and called from `popup.js` through embind. It owns the Pokémon pool, deals each round, checks guesses, and keeps score.
+
+### Difficulty levels
+
+Difficulty is the gap between the two Pokémon's values for the stat being asked:
+
+| Difficulty | Stat gap | Notes |
+|---|---|---|
+| Easy | 40 or more | |
+| Normal | any | Original game; ties count as correct either way |
+| Hard | 6–20 | |
+| Extreme | 1–5 | |
+
+For each stat, the engine keeps the pool sorted by that stat's value. Finding every opponent inside a difficulty's gap range is then two binary searches (O(log n)) rather than a scan of the whole pool. The engine tries the six stats in random order and deals the first one that has a valid opponent. It also avoids the last 8 Pokémon shown whenever the range has other options.
+
+### Building and testing
+
+The compiled module (`wasm/pkmn-engine.js` and `.wasm`) is committed, so the extension runs without a C++ toolchain. To work on the engine you need [CMake](https://cmake.org/), a C++ compiler (tests are run with MSVC), [Emscripten](https://emscripten.org/docs/getting_started/downloads.html), and [Ninja](https://ninja-build.org/).
+
+```bash
+npm run test:engine    # native build + GoogleTest unit tests
+npm run build:engine   # WebAssembly build -> wasm/ (run from a shell with emsdk_env activated)
+```

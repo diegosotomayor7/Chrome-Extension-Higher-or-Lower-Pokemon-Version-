@@ -59,6 +59,13 @@
         <button id="all-btn" class="selected">All</button>
       </div>
     </div>
+
+    <div class="difficulty-buttons">
+      <button id="easy-btn" class="difficulty-btn deselected" data-difficulty="easy">Easy</button>
+      <button id="normal-btn" class="difficulty-btn selected" data-difficulty="normal">Normal</button>
+      <button id="hard-btn" class="difficulty-btn deselected" data-difficulty="hard">Hard</button>
+      <button id="extreme-btn" class="difficulty-btn deselected" data-difficulty="extreme">Extreme</button>
+    </div>
     <button id="start-btn">Start</button>
   </div>
   <div id="game-container" style="display: none;">
@@ -86,6 +93,7 @@
     </div>
   </div>
   <script src="vendor/sql.js/sql-wasm-browser.js"></script>
+  <script src="wasm/pkmn-engine.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

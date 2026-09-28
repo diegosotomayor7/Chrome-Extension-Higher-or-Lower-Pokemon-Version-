@@ -138,7 +138,7 @@ button {
 
 #higher-btn { background-color: #2c802f; padding:6px }
 #lower-btn { background-color: #b1271d; padding:6px }
-#start-btn { background-color: #ffffff; color: black; font-size: 22px; margin-top:20px }
+#start-btn { background-color: #ffffff; color: black; font-size: 22px; margin-top:14px }
 #gen1-btn { background-color: #b40000; color: black; width: 44px; font-size: 12px; }
 #gen2-btn { background-color: #d58001; color: black; width: 44px; font-size: 12px; }
 #gen3-btn { background-color: #c54f00; color: black; width: 44px; font-size: 12px; }
@@ -149,5 +149,18 @@ button {
 #gen8-btn { background-color: #c10090; color: black; width: 44px; font-size: 12px; }
 #gen9-btn { background-color: #008dcf; color: black; width: 44px; font-size: 12px; }
 #all-btn { background-color: #bababa; color: rgb(0, 0, 0); width: 44px; height: 20px; font-size: 10px;}
+
+.difficulty-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.difficulty-btn { width: 70px; font-size: 13px; color: black; padding: 3px; }
+#easy-btn { background-color: #4caf50; }
+#normal-btn { background-color: #f2c200; }
+#hard-btn { background-color: #e67e22; }
+#extreme-btn { background-color: #d32f2f; color: white; }
 
 button:hover { opacity: 0.6; }

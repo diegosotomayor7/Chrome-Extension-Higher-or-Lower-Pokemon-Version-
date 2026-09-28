@@ -1,8 +1,12 @@
-// --- Pokédex Database ---
+// --- Loading ---
 
 // Start loading as soon as the popup opens so the game is ready by the time Start is clicked.
 const pokedexReady = loadPokedex();
 pokedexReady.catch(err => console.error('Failed to load Pokédex:', err));
+
+// The C++ game engine, compiled to WebAssembly (see engine/)
+const engineReady = createPkmnEngine();
+engineReady.catch(err => console.error('Failed to load game engine:', err));
 
 async function loadPokedex() {
     const SQL = await initSqlJs({ locateFile: file => `vendor/sql.js/${file}` });
@@ -23,8 +27,21 @@ function queryAll(db, sql, params = []) {
     }
 }
 
+const DIFFICULTY_LABELS = {
+    easy: "Easy",
+    normal: "Normal",
+    hard: "Hard",
+    extreme: "Extreme"
+};
 
-function gameLogic(db, enabledGens) {
+// High scores are kept per difficulty. Scores saved before difficulties existed count as Normal.
+async function loadHighScores() {
+    const data = await chrome.storage.local.get(['pkmnHighScores', 'pkmnHighScore']);
+    return data.pkmnHighScores ?? { normal: data.pkmnHighScore ?? 0 };
+}
+
+
+function gameLogic(db, EngineModule, enabledGens, difficulty) {
 
     // Load every Pokémon from the enabled generations in one query
     const placeholders = enabledGens.map(() => '?').join(', ');
@@ -32,117 +49,88 @@ function gameLogic(db, enabledGens) {
         SELECT id, name, hp, attack, defense, special_attack, special_defense, speed
         FROM pokemon_card
         WHERE generation_id IN (${placeholders})`, enabledGens);
+    const pokemonById = new Map(pool.map(p => [p.id, p]));
 
-    let highScore = 0;
-
-    // --- Prefetch Queue ---
-    // Pokémon are picked a few rounds ahead so their sprites are already downloaded when shown.
-    const QUEUE_SIZE = 3;
-    let prefetchQueue = [];
-
-    function randomPokemon(excludeId) {
-        let pkmn;
-        do {
-            pkmn = pool[Math.floor(Math.random() * pool.length)];
-        } while (pkmn.id === excludeId && pool.length > 1);
-        return pkmn;
+    const seed = crypto.getRandomValues(new Uint32Array(1))[0];
+    const engine = new EngineModule.Engine(seed);
+    for (const p of pool) {
+        engine.addPokemon(p.id, p.hp, p.attack, p.defense, p.special_attack, p.special_defense, p.speed);
     }
+    engine.setDifficulty(difficulty);
+    engine.startGame();
 
-    function fillQueue() {
-        while (prefetchQueue.length < QUEUE_SIZE) {
-            const pkmn = randomPokemon(null);
-            const img = new Image();
-            img.src = getImageUrl(pkmn.id);
-            prefetchQueue.push(pkmn);
-        }
-    }
+    // Indexed by the engine's stat number, in pokemon_card column order
+    const statNames = ["HP", "Attack", "Defense", "Special Attack", "Special Defense", "Speed"];
 
-    function getNextPokemon(excludeId) {
-        const index = prefetchQueue.findIndex(p => p.id !== excludeId);
-        const pkmn = index !== -1 ? prefetchQueue.splice(index, 1)[0] : randomPokemon(excludeId);
-        fillQueue();
-        return pkmn;
-    }
-    // --- End Prefetch Queue ---
+    let highScores = {};
 
     async function initGame() {
-        const data = await chrome.storage.local.get(['pkmnHighScore']);
-        if (data.pkmnHighScore) {
-            highScore = data.pkmnHighScore;
-            document.getElementById('high-score-label').innerText = `Best: ${highScore}`;
-        }
-        fillQueue();
-        newRound();
+        highScores = await loadHighScores();
+        showHighScore();
+        showRound();
     }
 
     function getImageUrl(id) {
         return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
     }
 
-    const statsMapping = {
-        "HP": "hp",
-        "Attack": "attack",
-        "Defense": "defense",
-        "Special Attack": "special_attack",
-        "Special Defense": "special_defense",
-        "Speed": "speed"
-    };
-
-    const statsOptions = Object.keys(statsMapping);
-    let currentPkmn, newPkmn, randomStat, count = 0;
-
-    function newRound() {
-        document.getElementById('question-label').innerText = "";
-
-        if (!currentPkmn) {
-            currentPkmn = getNextPokemon(null);
+    // Hides the sprite until it has downloaded, so the previous Pokémon's picture never shows under a new name
+    function setSprite(img, id) {
+        img.src = getImageUrl(id);
+        const show = () => { img.style.visibility = 'visible'; };
+        if (img.complete) {
+            show();
+        } else {
+            img.style.visibility = 'hidden';
+            img.onload = img.onerror = show;
         }
+    }
 
-        newPkmn = getNextPokemon(currentPkmn.id);
+    function showRound() {
+        const round = engine.round();
+        const currentPkmn = pokemonById.get(round.currentId);
+        const newPkmn = pokemonById.get(round.challengerId);
 
-        randomStat = statsOptions[Math.floor(Math.random() * statsOptions.length)];
-
-        document.getElementById('left-img').src = getImageUrl(currentPkmn.id);
-        document.getElementById('right-img').src = getImageUrl(newPkmn.id);
+        setSprite(document.getElementById('left-img'), currentPkmn.id);
+        setSprite(document.getElementById('right-img'), newPkmn.id);
         document.getElementById('left-name').innerText = currentPkmn.name;
         document.getElementById('right-name').innerText = newPkmn.name;
 
         document.getElementById('question-label').innerText =
-            `${newPkmn.name} has a higher/lower ${randomStat} than ${currentPkmn.name}`;
+            `${newPkmn.name} has a higher/lower ${statNames[round.stat]} than ${currentPkmn.name}`;
+
+        // Download the next challenger's sprite now so it appears instantly after a correct guess
+        const img = new Image();
+        img.src = getImageUrl(engine.upcomingRound().challengerId);
     }
 
     function checkGuess(guess) {
-        if (!currentPkmn || !newPkmn) return;
+        const round = engine.round();
+        const result = engine.guess(guess);
 
-        const key = statsMapping[randomStat];
-        const valCurrent = currentPkmn[key];
-        const valNew = newPkmn[key];
-
-        const correct = (guess === 'higher' && valNew >= valCurrent) ||
-                        (guess === 'lower' && valNew <= valCurrent);
-
-        if (correct) {
-            count++;
-            document.getElementById('score-label').innerText = `Score: ${count}`;
-            if (count > highScore) {
-                highScore = count;
-                saveHighScore(highScore);
+        if (result.correct) {
+            document.getElementById('score-label').innerText = `Score: ${result.score}`;
+            if (result.score > (highScores[difficulty] ?? 0)) {
+                highScores[difficulty] = result.score;
+                saveHighScores();
             }
-            currentPkmn = newPkmn;
-            newRound();
         } else {
-            alert(`Game Over! Score: ${count}\n\n${currentPkmn.name} ${randomStat}: ${valCurrent}\n${newPkmn.name} ${randomStat}: ${valNew}`);
-            count = 0;
+            const statName = statNames[round.stat];
+            alert(`Game Over! Score: ${result.score}\n\n` +
+                  `${pokemonById.get(round.currentId).name} ${statName}: ${result.currentValue}\n` +
+                  `${pokemonById.get(round.challengerId).name} ${statName}: ${result.challengerValue}`);
             document.getElementById('score-label').innerText = `Score: 0`;
-            currentPkmn = null;
-            newRound();
         }
+        showRound();
     }
 
-    function saveHighScore(score) {
-        chrome.storage.local.set({ 'pkmnHighScore': score }, () => {
-            document.getElementById('high-score-label').innerText = `Best: ${score}`;
-        });
+    function showHighScore() {
+        document.getElementById('high-score-label').innerText =
+            `Best (${DIFFICULTY_LABELS[difficulty]}): ${highScores[difficulty] ?? 0}`;
+    }
+
+    function saveHighScores() {
+        chrome.storage.local.set({ 'pkmnHighScores': highScores }, showHighScore);
     }
 
     document.getElementById('higher-btn').onclick = () => checkGuess('higher');
@@ -198,6 +186,29 @@ document.getElementById('all-btn').onclick = () => {
     }
 };
 
+// Difficulty buttons (one selected at a time, remembered between sessions)
+let selectedDifficulty = 'normal';
+
+function selectDifficulty(difficulty) {
+    selectedDifficulty = difficulty;
+    for (const btn of document.querySelectorAll('.difficulty-btn')) {
+        const isSelected = btn.dataset.difficulty === difficulty;
+        btn.classList.toggle('selected', isSelected);
+        btn.classList.toggle('deselected', !isSelected);
+    }
+}
+
+for (const btn of document.querySelectorAll('.difficulty-btn')) {
+    btn.onclick = () => {
+        selectDifficulty(btn.dataset.difficulty);
+        chrome.storage.local.set({ 'pkmnDifficulty': btn.dataset.difficulty });
+    };
+}
+
+chrome.storage.local.get(['pkmnDifficulty']).then(data => {
+    if (data.pkmnDifficulty in DIFFICULTY_LABELS) selectDifficulty(data.pkmnDifficulty);
+});
+
 // Start button
 document.getElementById('start-btn').onclick = async () => {
     const enabledGens = [];
@@ -212,16 +223,16 @@ document.getElementById('start-btn').onclick = async () => {
 
     const startBtn = document.getElementById('start-btn');
     startBtn.disabled = true;
-    let db;
+    let db, EngineModule;
     try {
-        db = await pokedexReady;
+        [db, EngineModule] = await Promise.all([pokedexReady, engineReady]);
     } catch {
-        alert("Couldn't load the Pokédex database. Try reopening the extension.");
+        alert("Couldn't load the game. Try reopening the extension.");
         startBtn.disabled = false;
         return;
     }
 
     document.getElementById('menu-container').style.display = 'none';
     document.getElementById('game-container').style.display = 'block';
-    gameLogic(db, enabledGens);
+    gameLogic(db, EngineModule, enabledGens, selectedDifficulty);
 };

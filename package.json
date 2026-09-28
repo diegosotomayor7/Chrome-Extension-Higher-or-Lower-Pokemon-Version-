@@ -9,7 +9,9 @@
   },
   "scripts": {
     "build:db": "node scripts/build-pokedex.mjs",
-    "vendor": "node scripts/vendor-sqljs.mjs"
+    "vendor": "node scripts/vendor-sqljs.mjs",
+    "build:engine": "emcmake cmake -S engine -B build/wasm -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/wasm",
+    "test:engine": "cmake -S engine -B build/native && cmake --build build/native --config Debug && ctest --test-dir build/native -C Debug --output-on-failure"
   },
   "devDependencies": {
     "sql.js": "^1.14.2"
