@@ -9,6 +9,7 @@
 #include <random>
 #include <set>
 #include <stdexcept>
+#include <string>
 
 using namespace pkmn;
 
@@ -107,7 +108,8 @@ TEST(Engine, CorrectGuessScoresAndAdvancesToUpcomingRound) {
 
     for (int expectedScore = 1; expectedScore <= 50; ++expectedScore) {
         const Round before = engine.round();
-        const Round upcoming = engine.upcomingRound();
+        ASSERT_TRUE(engine.upcomingRound().has_value());
+        const Round upcoming = *engine.upcomingRound();
         EXPECT_EQ(upcoming.currentId, before.challengerId);
 
         const GuessResult result = engine.guess(correctGuess(pool, before));
@@ -241,4 +243,196 @@ TEST(Engine, SameSeedDealsSameGame) {
         a.guess(correctGuess(pool, ra));
         b.guess(correctGuess(pool, rb));
     }
+}
+
+TEST(Engine, EndlessNeverFinishesOrCountsMistakes) {
+    const auto pool = randomPool(100);
+    Engine engine = makeEngine(pool, Difficulty::Hard);  // Hard never deals ties, so a wrong guess exists
+    EXPECT_FALSE(engine.isDaily());
+    for (int i = 0; i < 10; ++i) {
+        const Round r = engine.round();
+        engine.guess(correctGuess(pool, r) == Guess::Higher ? Guess::Lower : Guess::Higher);
+    }
+    EXPECT_FALSE(engine.isFinished());
+    EXPECT_EQ(engine.mistakes(), 0);
+    EXPECT_TRUE(engine.upcomingRound().has_value());
+}
+
+// --- Daily Challenge ---
+
+namespace {
+
+Engine makeDaily(const std::map<int, Pokemon>& pool, std::uint32_t seed) {
+    Engine engine(seed);
+    for (const auto& [id, pokemon] : pool) engine.addPokemon(pokemon);
+    engine.startDailyChallenge();
+    return engine;
+}
+
+Guess wrongGuess(const std::map<int, Pokemon>& pool, const Round& r) {
+    return correctGuess(pool, r) == Guess::Higher ? Guess::Lower : Guess::Higher;
+}
+
+bool sameRound(const Round& a, const Round& b) {
+    return a.currentId == b.currentId && a.challengerId == b.challengerId && a.stat == b.stat;
+}
+
+}  // namespace
+
+TEST(Daily, DifficultyGoesUpEveryFiveRounds) {
+    for (int round = 1; round <= 5; ++round) EXPECT_EQ(daily::difficultyForRound(round), Difficulty::Easy);
+    for (int round = 6; round <= 10; ++round) EXPECT_EQ(daily::difficultyForRound(round), Difficulty::Normal);
+    for (int round = 11; round <= 15; ++round) EXPECT_EQ(daily::difficultyForRound(round), Difficulty::Hard);
+    for (int round = 16; round <= 20; ++round) EXPECT_EQ(daily::difficultyForRound(round), Difficulty::Extreme);
+    EXPECT_THROW(daily::difficultyForRound(0), std::out_of_range);
+    EXPECT_THROW(daily::difficultyForRound(21), std::out_of_range);
+}
+
+TEST(Daily, SeedDependsOnlyOnTheDate) {
+    EXPECT_EQ(daily::seedForDate("2026-09-28"), daily::seedForDate("2026-09-28"));
+    std::set<std::uint32_t> seeds;
+    for (int day = 1; day <= 28; ++day) {
+        seeds.insert(daily::seedForDate("2026-02-" + std::string(day < 10 ? "0" : "") + std::to_string(day)));
+    }
+    EXPECT_EQ(seeds.size(), 28u);
+}
+
+TEST(Daily, EachRoundUsesItsScheduledDifficulty) {
+    const auto pool = randomPool(400);
+    for (std::uint32_t seed = 1; seed <= 20; ++seed) {
+        Engine engine = makeDaily(pool, seed);
+        for (int round = 1; round <= daily::kRounds; ++round) {
+            const Round r = engine.round();
+            const GapRange range = gapRange(daily::difficultyForRound(round));
+            ASSERT_EQ(engine.roundNumber(), round);
+            ASSERT_EQ(engine.roundDifficulty(), daily::difficultyForRound(round));
+            ASSERT_GE(gapOf(pool, r), range.min) << "seed " << seed << " round " << round;
+            ASSERT_LE(gapOf(pool, r), range.max) << "seed " << seed << " round " << round;
+            ASSERT_NE(r.currentId, r.challengerId);
+            engine.guess(correctGuess(pool, r));
+        }
+    }
+}
+
+TEST(Daily, PerfectGameFinishesAfterTwentyRounds) {
+    const auto pool = randomPool(300);
+    Engine engine = makeDaily(pool, 99);
+    for (int round = 1; round <= daily::kRounds; ++round) {
+        ASSERT_FALSE(engine.isFinished());
+        EXPECT_EQ(engine.upcomingRound().has_value(), round < daily::kRounds);
+        const GuessResult result = engine.guess(correctGuess(pool, engine.round()));
+        EXPECT_TRUE(result.correct);
+        EXPECT_EQ(result.score, round);
+    }
+    EXPECT_TRUE(engine.isFinished());
+    EXPECT_EQ(engine.score(), daily::kRounds);
+    EXPECT_EQ(engine.mistakes(), 0);
+    EXPECT_THROW(engine.guess(Guess::Higher), std::logic_error);
+}
+
+TEST(Daily, WrongGuessCountsAsMistakeAndGameContinues) {
+    const auto pool = randomPool(300);
+    Engine engine = makeDaily(pool, 5);
+    engine.guess(correctGuess(pool, engine.round()));
+    const Round r = engine.round();
+    const GuessResult result = engine.guess(wrongGuess(pool, r));  // round 2 is Easy, so never a tie
+
+    EXPECT_FALSE(result.correct);
+    EXPECT_EQ(result.score, 1);
+    EXPECT_EQ(engine.score(), 1);
+    EXPECT_EQ(engine.mistakes(), 1);
+    EXPECT_FALSE(engine.isFinished());
+    EXPECT_EQ(engine.roundNumber(), 3);
+    EXPECT_EQ(engine.round().currentId, r.challengerId);  // the chain continues
+}
+
+TEST(Daily, ThreeMistakesAllowedFourthEndsTheChallenge) {
+    const auto pool = randomPool(300);
+    {
+        Engine engine = makeDaily(pool, 11);
+        for (int i = 0; i < daily::kMistakesAllowed; ++i) engine.guess(wrongGuess(pool, engine.round()));
+        EXPECT_FALSE(engine.isFinished());
+        while (!engine.isFinished()) engine.guess(correctGuess(pool, engine.round()));
+        EXPECT_EQ(engine.score(), daily::kRounds - daily::kMistakesAllowed);
+        EXPECT_EQ(engine.mistakes(), daily::kMistakesAllowed);
+        EXPECT_EQ(engine.roundNumber(), daily::kRounds);
+    }
+    {
+        Engine engine = makeDaily(pool, 11);
+        for (int i = 0; i <= daily::kMistakesAllowed; ++i) engine.guess(wrongGuess(pool, engine.round()));
+        EXPECT_TRUE(engine.isFinished());
+        EXPECT_EQ(engine.score(), 0);
+        EXPECT_EQ(engine.roundNumber(), daily::kMistakesAllowed + 1);
+    }
+}
+
+TEST(Daily, SameSeedSameRoundsWhateverThePlayerGuesses) {
+    const auto pool = randomPool(300);
+    Engine perfect = makeDaily(pool, daily::seedForDate("2026-09-28"));
+    Engine sloppy = makeDaily(pool, daily::seedForDate("2026-09-28"));
+    for (int round = 1; round <= daily::kRounds; ++round) {
+        ASSERT_TRUE(sameRound(perfect.round(), sloppy.round())) << "round " << round;
+        perfect.guess(correctGuess(pool, perfect.round()));
+        const Round r = sloppy.round();
+        sloppy.guess(round % 7 == 0 ? wrongGuess(pool, r) : correctGuess(pool, r));
+    }
+    EXPECT_EQ(sloppy.mistakes(), 2);
+}
+
+TEST(Daily, DifferentDatesGiveDifferentChallenges) {
+    const auto pool = randomPool(300);
+    Engine a = makeDaily(pool, daily::seedForDate("2026-09-28"));
+    Engine b = makeDaily(pool, daily::seedForDate("2026-09-29"));
+    int same = 0;
+    for (int round = 1; round <= daily::kRounds; ++round) {
+        if (sameRound(a.round(), b.round())) ++same;
+        a.guess(correctGuess(pool, a.round()));
+        b.guess(correctGuess(pool, b.round()));
+    }
+    EXPECT_LT(same, 3);
+}
+
+TEST(Daily, RestartingReplaysTheSameChallenge) {
+    const auto pool = randomPool(300);
+    Engine engine = makeDaily(pool, 77);
+    const Round first = engine.round();
+    for (int i = 0; i < 6; ++i) engine.guess(correctGuess(pool, engine.round()));
+    engine.startGame();  // an endless game in between uses up random numbers
+    engine.startDailyChallenge();
+    EXPECT_TRUE(sameRound(engine.round(), first));
+}
+
+TEST(Daily, ResumeContinuesWhereTheGameStopped) {
+    const auto pool = randomPool(300);
+    Engine original = makeDaily(pool, 2024);
+    for (int i = 0; i < 9; ++i) {
+        const Round r = original.round();
+        original.guess(i == 2 || i == 5 ? wrongGuess(pool, r) : correctGuess(pool, r));
+    }
+    ASSERT_EQ(original.score(), 7);
+    ASSERT_EQ(original.mistakes(), 2);
+
+    Engine resumed(2024);
+    for (const auto& [id, pokemon] : pool) resumed.addPokemon(pokemon);
+    resumed.resumeDailyChallenge(9, 7, 2);
+    EXPECT_EQ(resumed.roundNumber(), 10);
+    EXPECT_EQ(resumed.score(), 7);
+    EXPECT_EQ(resumed.mistakes(), 2);
+
+    while (!original.isFinished()) {
+        ASSERT_TRUE(sameRound(original.round(), resumed.round()));
+        original.guess(correctGuess(pool, original.round()));
+        resumed.guess(correctGuess(pool, resumed.round()));
+    }
+    EXPECT_TRUE(resumed.isFinished());
+    EXPECT_EQ(resumed.score(), original.score());
+}
+
+TEST(Daily, ResumeRejectsImpossibleProgress) {
+    Engine engine = makeDaily(randomPool(50), 1);
+    EXPECT_THROW(engine.resumeDailyChallenge(5, 4, 0), std::invalid_argument);    // score + mistakes != rounds
+    EXPECT_THROW(engine.resumeDailyChallenge(8, 4, 4), std::invalid_argument);    // already out of mistakes
+    EXPECT_THROW(engine.resumeDailyChallenge(20, 20, 0), std::invalid_argument);  // already finished
+    EXPECT_THROW(engine.resumeDailyChallenge(-1, 0, 0), std::invalid_argument);
+    EXPECT_NO_THROW(engine.resumeDailyChallenge(0, 0, 0));
 }

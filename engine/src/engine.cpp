@@ -40,7 +40,31 @@ std::optional<Guess> parseGuess(std::string_view name) {
     return std::nullopt;
 }
 
-Engine::Engine(std::uint32_t seed) : rng_(seed) {}
+namespace daily {
+
+static_assert(kRounds == 4 * kRoundsPerDifficulty, "one block of rounds per difficulty");
+
+Difficulty difficultyForRound(int round) {
+    if (round < 1 || round > kRounds) {
+        throw std::out_of_range("daily round " + std::to_string(round) + " is outside 1-20");
+    }
+    constexpr Difficulty kSchedule[] = {Difficulty::Easy, Difficulty::Normal, Difficulty::Hard,
+                                        Difficulty::Extreme};
+    return kSchedule[(round - 1) / kRoundsPerDifficulty];
+}
+
+std::uint32_t seedForDate(std::string_view isoDate) {
+    std::uint32_t hash = 2166136261u;  // FNV-1a offset basis
+    for (unsigned char c : isoDate) {
+        hash ^= c;
+        hash *= 16777619u;  // FNV prime
+    }
+    return hash;
+}
+
+}  // namespace daily
+
+Engine::Engine(std::uint32_t seed) : seed_(seed), rng_(seed) {}
 
 void Engine::addPokemon(const Pokemon& pokemon) {
     if (!ids_.insert(pokemon.id).second) {
@@ -50,45 +74,101 @@ void Engine::addPokemon(const Pokemon& pokemon) {
 }
 
 void Engine::startGame() {
-    if (pool_.size() < 2) {
-        throw std::logic_error("need at least 2 Pokémon to play");
-    }
-    buildIndex();
-    score_ = 0;
-    recent_.clear();
+    daily_ = false;
+    dealFirstRound();
+}
 
-    const std::size_t first = randomIndex(pool_.size());
-    remember(first);
-    round_ = deal(first);
-    remember(round_->challenger);
-    upcoming_ = deal(round_->challenger);
+void Engine::startDailyChallenge() {
+    daily_ = true;
+    rng_.seed(seed_);  // same seed, same rounds, even if this engine already played
+    dealFirstRound();
+}
+
+void Engine::resumeDailyChallenge(int roundsPlayed, int score, int mistakes) {
+    if (roundsPlayed < 0 || roundsPlayed >= daily::kRounds || score < 0 || mistakes < 0 ||
+        score + mistakes != roundsPlayed || mistakes > daily::kMistakesAllowed) {
+        throw std::invalid_argument("not an unfinished Daily Challenge");
+    }
+    startDailyChallenge();
+    // Rounds don't depend on guesses, so replaying the deals reproduces the interrupted game.
+    for (int i = 0; i < roundsPlayed; ++i) advance();
+    score_ = score;
+    mistakes_ = mistakes;
 }
 
 Round Engine::round() const { return toRound(started()); }
 
-Round Engine::upcomingRound() const {
+std::optional<Round> Engine::upcomingRound() const {
     started();
+    if (!upcoming_) return std::nullopt;
     return toRound(*upcoming_);
 }
 
 GuessResult Engine::guess(Guess guess) {
     const Deal& d = started();
+    if (finished_) throw std::logic_error("the Daily Challenge is already finished");
+
     const int currentValue = pool_[d.current].stat(d.stat);
     const int challengerValue = pool_[d.challenger].stat(d.stat);
-
     const bool correct = guess == Guess::Higher ? challengerValue >= currentValue
                                                 : challengerValue <= currentValue;
+
+    if (daily_) {
+        if (correct) {
+            ++score_;
+        } else {
+            ++mistakes_;
+        }
+        const GuessResult result{correct, currentValue, challengerValue, score_};
+        if (mistakes_ > daily::kMistakesAllowed || roundNumber_ == daily::kRounds) {
+            finished_ = true;
+        } else {
+            advance();
+        }
+        return result;
+    }
+
     if (!correct) {
         const int finalScore = score_;
         startGame();
         return {false, currentValue, challengerValue, finalScore};
     }
-
     ++score_;
-    round_ = upcoming_;
-    remember(round_->challenger);
-    upcoming_ = deal(round_->challenger);
+    advance();
     return {true, currentValue, challengerValue, score_};
+}
+
+void Engine::dealFirstRound() {
+    if (pool_.size() < 2) {
+        throw std::logic_error("need at least 2 Pokémon to play");
+    }
+    buildIndex();
+    score_ = 0;
+    mistakes_ = 0;
+    finished_ = false;
+    recent_.clear();
+
+    roundNumber_ = 0;
+    const std::size_t first = randomIndex(pool_.size());
+    remember(first);
+    upcoming_ = deal(first, difficultyFor(1));
+    advance();
+}
+
+// Moves to the upcoming round and deals the one after it (none after the last Daily Challenge round).
+void Engine::advance() {
+    round_ = upcoming_;
+    ++roundNumber_;
+    remember(round_->challenger);
+    if (daily_ && roundNumber_ >= daily::kRounds) {
+        upcoming_.reset();
+    } else {
+        upcoming_ = deal(round_->challenger, difficultyFor(roundNumber_ + 1));
+    }
+}
+
+Difficulty Engine::difficultyFor(int roundNumber) const {
+    return daily_ ? daily::difficultyForRound(std::clamp(roundNumber, 1, daily::kRounds)) : difficulty_;
 }
 
 void Engine::buildIndex() {
@@ -106,13 +186,13 @@ void Engine::buildIndex() {
 
 // Tries the stats in random order and uses the first one that has a challenger in the difficulty's
 // gap range. If none does (only possible with a tiny pool), falls back to a random stat and challenger.
-Engine::Deal Engine::deal(std::size_t current) {
+Engine::Deal Engine::deal(std::size_t current, Difficulty difficulty) {
     std::array<Stat, kStatCount> stats{Stat::Hp, Stat::Attack, Stat::Defense,
                                        Stat::SpecialAttack, Stat::SpecialDefense, Stat::Speed};
     std::shuffle(stats.begin(), stats.end(), rng_);
 
     for (Stat stat : stats) {
-        if (auto challenger = pickChallenger(current, stat)) {
+        if (auto challenger = pickChallenger(current, stat, difficulty)) {
             return {current, *challenger, stat};
         }
     }
@@ -126,10 +206,10 @@ Engine::Deal Engine::deal(std::size_t current) {
 // search on the sorted per-stat index. With gap [lo, hi] around value v, those are the entries with
 // values in [v-hi, v-lo] and [v+lo, v+hi] (one merged range when lo is 0). Picks one uniformly,
 // preferring Pokémon not shown recently.
-std::optional<std::size_t> Engine::pickChallenger(std::size_t current, Stat stat) {
+std::optional<std::size_t> Engine::pickChallenger(std::size_t current, Stat stat, Difficulty difficulty) {
     const auto& entries = byStat_[static_cast<std::size_t>(stat)];
     const int v = pool_[current].stat(stat);
-    const auto [lo, hi] = gapRange(difficulty_);
+    const auto [lo, hi] = gapRange(difficulty);
 
     auto valueRange = [&](int from, int to) {
         auto first = std::lower_bound(entries.begin(), entries.end(), from,
@@ -184,7 +264,7 @@ bool Engine::isRecent(std::size_t poolIndex) const {
 }
 
 const Engine::Deal& Engine::started() const {
-    if (!round_) throw std::logic_error("startGame() has not been called");
+    if (!round_) throw std::logic_error("no game has been started");
     return *round_;
 }
 

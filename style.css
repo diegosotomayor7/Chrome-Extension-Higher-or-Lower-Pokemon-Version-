@@ -10,13 +10,91 @@ body {
   align-items: center;
 }
 
-#menu-container {
+.screen {
   text-align: center;
   width: 100%;
+}
+
+#main-menu {
+  h2 { font-size: 32px; color:#ffffff; margin: 0 0 28px; }
+  h2, .main-buttons { position: relative; z-index: 1; }
+}
+
+/* Decorative sprites scattered around the main menu, bobbing gently out of step with each other */
+.menu-pokemon img {
+  position: absolute;
+  height: auto;
+  pointer-events: none;
+  --flip: 1;
+  animation: bob 3s ease-in-out infinite alternate;
+}
+
+.menu-pokemon img.face-right { --flip: -1; }
+.menu-pokemon img:nth-child(3n + 1) { animation-delay: -1s; }
+.menu-pokemon img:nth-child(3n + 2) { animation-delay: -2s; animation-duration: 3.6s; }
+
+@keyframes bob {
+  from { transform: scaleX(var(--flip)) translateY(0); }
+  to   { transform: scaleX(var(--flip)) translateY(-5px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-pokemon img { animation: none; transform: scaleX(var(--flip)); }
+}
+
+.main-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.main-btn { width: 220px; font-size: 20px; padding: 10px; }
+#daily-btn { background-color: #3891A6; color: black; }
+#play-btn { background-color: #FDE74C; color: black; }
+#stats-btn { background-color: #E3655B; color: black; }
+
+.back-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: auto;
+  padding: 4px 10px;
+  background-color: #444444;
+  font-size: 12px;
+}
+
+#menu-container {
   margin-top: -20px;
-  h2 { font-size: 32px; color:#ffffff; margin-bottom: 4px; }
   h4 { font-size: 16px; margin-top: 0; }
 }
+
+#round-label {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  right: 0;
+  font-size: 14px;
+  font-weight: bold;
+  pointer-events: none;
+}
+
+.difficulty-easy { color: #4caf50; }
+.difficulty-normal { color: #f2c200; }
+.difficulty-hard { color: #e67e22; }
+.difficulty-extreme { color: #ff5a5a; }
+
+#daily-summary h2, #stats-screen h2 { font-size: 28px; margin: 0 0 6px; }
+#daily-date { font-size: 16px; color: #bbbbbb; }
+#daily-score { font-size: 64px; font-weight: bold; margin: 18px 0 6px; }
+#daily-detail { font-size: 16px; }
+#daily-tomorrow { font-size: 22px; font-weight: bold; margin-top: 28px; }
+
+#stats-screen h4 { font-size: 16px; margin: 14px 0 8px; color: #bbbbbb; }
+#stats-table { margin: 0 auto; border-collapse: collapse; font-size: 18px; }
+#stats-table th { text-align: left; padding: 4px 24px 4px 0; }
+#stats-table td { text-align: right; padding: 4px 0; font-weight: bold; min-width: 40px; }
+#daily-completed { font-size: 18px; font-weight: bold; margin-top: 24px; }
 
 #game-container {
   text-align: center;

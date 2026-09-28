@@ -50,8 +50,25 @@ val submitGuess(pkmn::Engine& engine, const std::string& name) {
 }
 
 val currentRound(const pkmn::Engine& engine) { return toJs(engine.round()); }
-val nextRound(const pkmn::Engine& engine) { return toJs(engine.upcomingRound()); }
 int poolSizeInt(const pkmn::Engine& engine) { return static_cast<int>(engine.poolSize()); }
+
+// null on the last round of a Daily Challenge
+val nextRound(const pkmn::Engine& engine) {
+    auto round = engine.upcomingRound();
+    return round ? toJs(*round) : val::null();
+}
+
+std::string roundDifficultyName(const pkmn::Engine& engine) {
+    switch (engine.roundDifficulty()) {
+        case pkmn::Difficulty::Easy: return "easy";
+        case pkmn::Difficulty::Normal: return "normal";
+        case pkmn::Difficulty::Hard: return "hard";
+        case pkmn::Difficulty::Extreme: return "extreme";
+    }
+    return "normal";
+}
+
+std::uint32_t dailySeed(const std::string& isoDate) { return pkmn::daily::seedForDate(isoDate); }
 
 }  // namespace
 
@@ -61,9 +78,20 @@ EMSCRIPTEN_BINDINGS(pkmn_engine) {
         .function("addPokemon", &addPokemonStats)
         .function("setDifficulty", &setDifficultyByName)
         .function("startGame", &pkmn::Engine::startGame)
+        .function("startDailyChallenge", &pkmn::Engine::startDailyChallenge)
+        .function("resumeDailyChallenge", &pkmn::Engine::resumeDailyChallenge)
         .function("round", &currentRound)
         .function("upcomingRound", &nextRound)
         .function("guess", &submitGuess)
         .function("score", &pkmn::Engine::score)
+        .function("roundNumber", &pkmn::Engine::roundNumber)
+        .function("roundDifficulty", &roundDifficultyName)
+        .function("mistakes", &pkmn::Engine::mistakes)
+        .function("isFinished", &pkmn::Engine::isFinished)
         .function("poolSize", &poolSizeInt);
+
+    emscripten::function("dailySeed", &dailySeed);
+    emscripten::constant("DAILY_ROUNDS", pkmn::daily::kRounds);
+    emscripten::constant("DAILY_ROUNDS_PER_DIFFICULTY", pkmn::daily::kRoundsPerDifficulty);
+    emscripten::constant("DAILY_MISTAKES_ALLOWED", pkmn::daily::kMistakesAllowed);
 }

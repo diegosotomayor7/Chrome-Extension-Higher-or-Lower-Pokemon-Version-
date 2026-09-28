@@ -20,12 +20,18 @@ A simple and addictive Chrome Extension game inspired by the classic "Higher or 
 
 ##  How to Play
 
-1. Click the extension icon in your Chrome toolbar to open the popup, pick your generations and a difficulty, and press **Start**.
+1. Click the extension icon in your Chrome toolbar to open the popup. Choose **Play**, pick your generations and a difficulty, and press **Start** (or try the **Daily Challenge**, below).
 2. Two Pokémon will appear with a random stat category (HP, Attack, Defense, Special Attack, Special Defense, or Speed).
 3. Guess whether the **new Pokémon** (right) has a **higher** or **lower** value for that stat compared to the **current Pokémon** (left).
 4. If you're correct, your score increases and the new Pokémon becomes the current one for the next round.
 5. If you're wrong, it's **Game Over** — the correct stats are revealed and your score resets.
 6. Try to beat your **high score**, which is saved locally between sessions!
+
+### Daily Challenge
+
+Everyone gets the same 20 rounds each day, drawn from every generation. Rounds 1–5 are Easy, 6–10 Normal, 11–15 Hard, and 16–20 Extreme. A wrong answer counts as a mistake and the challenge moves on to the next round. You can make 3 mistakes; the 4th ends the challenge. You get one attempt per day, and if you close the popup midway, you pick up where you left off.
+
+**Stats** shows your best score on each difficulty and how many Daily Challenges you've completed.
 
 ---
 
@@ -34,6 +40,7 @@ A simple and addictive Chrome Extension game inspired by the classic "Higher or 
 - **1025 Pokémon** — Covers all Pokémon through Generation IX (as of February 2025)
 - **6 stat categories** — HP, Attack, Defense, Special Attack, Special Defense, and Speed
 - **4 difficulty levels** — Easy, Normal, Hard, and Extreme control how close the two Pokémon's stats are (see below)
+- **Daily Challenge** — The same 20 rounds for every player each day, getting harder every 5 rounds
 - **Persistent high scores** — Your best streak on each difficulty is saved using `chrome.storage.local`
 - **Live Pokémon sprites** — Fetched directly from the official [PokeAPI sprite repository](https://github.com/PokeAPI/sprites)
 - **Bundled Pokédex database** — Stats come from a local SQLite database queried in the browser with [sql.js](https://github.com/sql-js/sql.js), so rounds load instantly with no API calls
@@ -78,12 +85,14 @@ Difficulty is the gap between the two Pokémon's values for the stat being asked
 
 | Difficulty | Stat gap | Notes |
 |---|---|---|
-| Easy | 40 or more | |
+| Easy | 50 or more | |
 | Normal | any | Original game; ties count as correct either way |
-| Hard | 6–20 | |
-| Extreme | 1–5 | |
+| Hard | 11–30 | |
+| Extreme | 1–10 | |
 
 For each stat, the engine keeps the pool sorted by that stat's value. Finding every opponent inside a difficulty's gap range is then two binary searches (O(log n)) rather than a scan of the whole pool. The engine tries the six stats in random order and deals the first one that has a valid opponent. It also avoids the last 8 Pokémon shown whenever the range has other options.
+
+The Daily Challenge seeds the engine's random number generator with an FNV-1a hash of the local date. Because each round depends only on the seed and the pool, not on the player's guesses, every player gets the same rounds, and an interrupted challenge is restored by replaying the deals up to the saved round.
 
 ### Building and testing
 
