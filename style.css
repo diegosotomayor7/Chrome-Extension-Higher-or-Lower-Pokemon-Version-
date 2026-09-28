@@ -13,9 +13,9 @@ body {
 #menu-container {
   text-align: center;
   width: 100%;
-  margin-top: -30px;
-  h1 { font-size: 36px; color:#ffffff}
-  h3 { font-size: 18px; }
+  margin-top: -20px;
+  h2 { font-size: 32px; color:#ffffff; margin-bottom: 4px; }
+  h4 { font-size: 16px; margin-top: 0; }
 }
 
 #game-container {
@@ -148,7 +148,7 @@ button {
 #gen7-btn { background-color: #c10047; color: black; width: 44px; font-size: 13px; }
 #gen8-btn { background-color: #c10090; color: black; width: 44px; font-size: 12px; }
 #gen9-btn { background-color: #008dcf; color: black; width: 44px; font-size: 12px; }
-#all-btn { background-color: #bababa; color: rgb(0, 0, 0); width: 44px; height: 20px; font-size: 10px;}
+#all-btn { background-color: #bababa; color: black; width: 44px; height: 32px; font-size: 12px; }
 
 .difficulty-buttons {
   display: flex;

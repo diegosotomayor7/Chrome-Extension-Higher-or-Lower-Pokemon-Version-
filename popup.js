@@ -142,48 +142,51 @@ function gameLogic(db, EngineModule, enabledGens, difficulty) {
 
 // --- Menu Logic ---
 
+// No generations are selected until the player picks some
 let genStates = {
-    1: true,
-    2: true,
-    3: true,
-    4: true,
-    5: true,
-    6: true,
-    7: true,
-    8: true,
-    9: true,
-    10: true
+    1: false,
+    2: false,
+    3: false,
+    4: false,
+    5: false,
+    6: false,
+    7: false,
+    8: false,
+    9: false
 };
+
+function setSelected(btn, isSelected) {
+    btn.classList.toggle('selected', isSelected);
+    btn.classList.toggle('deselected', !isSelected);
+}
+
+function allGensSelected() {
+    return Object.values(genStates).every(state => state);
+}
+
+// Updates the generation buttons, and lights up All only when every generation is selected
+function updateGenButtons() {
+    for (let i = 1; i <= 9; i++) {
+        setSelected(document.getElementById(`gen${i}-btn`), genStates[i]);
+    }
+    setSelected(document.getElementById('all-btn'), allGensSelected());
+}
 
 // Toggle buttons on click
 for (let i = 1; i <= 9; i++) {
     document.getElementById(`gen${i}-btn`).onclick = () => {
         genStates[i] = !genStates[i];
-        const btn = document.getElementById(`gen${i}-btn`);
-        if (genStates[i]) {
-            btn.classList.remove('deselected');
-            btn.classList.add('selected');
-        } else {
-            btn.classList.remove('selected');
-            btn.classList.add('deselected');
-        }
+        updateGenButtons();
     };
 }
 
-// All generations button
+// All generations button: selects every generation, or clears them if they're all already selected
 document.getElementById('all-btn').onclick = () => {
-    const allSelected = Object.values(genStates).every(state => state);
+    const selectAll = !allGensSelected();
     for (let i = 1; i <= 9; i++) {
-        genStates[i] = !allSelected;
-        const btn = document.getElementById(`gen${i}-btn`);
-        if (genStates[i]) {
-            btn.classList.remove('deselected');
-            btn.classList.add('selected');
-        } else {
-            btn.classList.remove('selected');
-            btn.classList.add('deselected');
-        }
+        genStates[i] = selectAll;
     }
+    updateGenButtons();
 };
 
 // Difficulty buttons (one selected at a time, remembered between sessions)
@@ -192,9 +195,7 @@ let selectedDifficulty = 'normal';
 function selectDifficulty(difficulty) {
     selectedDifficulty = difficulty;
     for (const btn of document.querySelectorAll('.difficulty-btn')) {
-        const isSelected = btn.dataset.difficulty === difficulty;
-        btn.classList.toggle('selected', isSelected);
-        btn.classList.toggle('deselected', !isSelected);
+        setSelected(btn, btn.dataset.difficulty === difficulty);
     }
 }
 
